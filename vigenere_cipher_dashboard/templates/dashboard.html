@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Vigenère Cipher</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+<body data-default-mode="{{ mode }}">
+
+<!-- ================= Navigation ================= -->
+<nav class="navbar navbar-expand-lg glass-nav sticky-top">
+  <div class="container-fluid px-lg-4">
+    <a class="navbar-brand fw-bold" href="{{ url_for('dashboard') }}">
+      <i class="fa-solid fa-shield-halved text-info me-2"></i>Vigenère Cipher
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="mainNav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}"><i class="fa-solid fa-gauge-high me-1"></i> Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('encrypt_page') }}"><i class="fa-solid fa-lock me-1"></i> Encrypt</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('decrypt_page') }}"><i class="fa-solid fa-unlock me-1"></i> Decrypt</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('history') }}"><i class="fa-solid fa-clock-rotate-left me-1"></i> History</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('how_it_works') }}"><i class="fa-solid fa-book-open me-1"></i> How It Works</a></li>
+      </ul>
+      <span class="navbar-text text-secondary me-3 d-none d-lg-inline">
+        <i class="fa-solid fa-user-circle me-1"></i>{{ session.get('username', 'user') }}
+      </span>
+      <a href="{{ url_for('logout') }}" class="btn btn-outline-danger btn-sm">
+        <i class="fa-solid fa-right-from-bracket me-1"></i> Logout
+      </a>
+    </div>
+  </div>
+</nav>
+
+<div class="container-fluid px-lg-4 py-4">
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+          <i class="fa-solid fa-circle-info me-2"></i>{{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <!-- ================= Header ================= -->
+  <header class="page-header mb-4">
+    <h1 class="h3 fw-bold mb-1">Vigenère <span class="gradient-text">Cipher</span></h1>
+    <p class="text-secondary mb-0">Polyalphabetic Substitution Cipher</p>
+  </header>
+
+  <!-- ================= Statistics ================= -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+      <div class="glass-card stat-card h-100">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="stat-label">Total Operations</div>
+            <div class="stat-value" id="statTotal">0</div>
+            <div class="stat-sub">all time</div>
+          </div>
+          <span class="icon-bubble"><i class="fa-solid fa-layer-group"></i></span>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="glass-card stat-card h-100">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="stat-label">Encrypted</div>
+            <div class="stat-value text-info" id="statEncrypted">0</div>
+            <div class="stat-sub">operations</div>
+          </div>
+          <span class="icon-bubble"><i class="fa-solid fa-lock"></i></span>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="glass-card stat-card h-100">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="stat-label">Decrypted</div>
+            <div class="stat-value text-purple" id="statDecrypted">0</div>
+            <div class="stat-sub">operations</div>
+          </div>
+          <span class="icon-bubble purple"><i class="fa-solid fa-unlock"></i></span>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="glass-card stat-card h-100">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="stat-label">Avg Key Length</div>
+            <div class="stat-value" id="statAvgKey">0</div>
+            <div class="stat-sub">characters</div>
+          </div>
+          <span class="icon-bubble green"><i class="fa-solid fa-key"></i></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Cipher panel + Result ================= -->
+  <div class="row g-4 mb-4">
+    <!-- Input card -->
+    <div class="col-lg-6">
+      <div class="glass-card h-100">
+        <div class="card-head">
+          <h5><i class="fa-solid fa-terminal text-info me-2"></i>Cipher Panel</h5>
+          <div class="mode-pill" id="modePill">Encryption</div>
+        </div>
+
+        <form id="cipherForm" novalidate>
+          <div class="mb-3">
+            <label for="messageInput" class="form-label">Message</label>
+            <textarea class="form-control glass-input" id="messageInput" rows="4"
+                      placeholder="Enter your message..."></textarea>
+          </div>
+
+          <div class="mb-3">
+            <label for="keyInput" class="form-label">Secret Key</label>
+            <input type="text" class="form-control glass-input" id="keyInput"
+                   placeholder="Enter encryption key..." autocomplete="off">
+          </div>
+
+          <div id="inputError" class="alert alert-danger py-2 d-none" role="alert"></div>
+
+          <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-accent flex-fill" id="btnEncrypt" onclick="encryptVigenere()">
+              <i class="fa-solid fa-lock me-2"></i>Encrypt
+            </button>
+            <button type="button" class="btn btn-purple flex-fill" id="btnDecrypt" onclick="decryptVigenere()">
+              <i class="fa-solid fa-unlock me-2"></i>Decrypt
+            </button>
+            <button type="button" class="btn btn-glass" onclick="clearDashboard()">
+              <i class="fa-solid fa-eraser me-2"></i>Clear
+            </button>
+          </div>
+        </form>
+
+        <!-- Repeated key preview -->
+        <div class="mt-4">
+          <div class="small text-secondary mb-1"><i class="fa-solid fa-repeat me-1"></i> Repeated Key</div>
+          <div class="repeated-key-box" id="repeatedKey">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Result card -->
+    <div class="col-lg-6">
+      <div class="glass-card h-100">
+        <div class="card-head">
+          <h5><i class="fa-solid fa-flag-checkered text-info me-2"></i>Result</h5>
+          <span class="badge-result" id="resultBadge">waiting…</span>
+        </div>
+
+        <div class="result-box" id="resultBox">Your result will appear here.</div>
+
+        <div class="d-flex gap-2 mt-3">
+          <button class="btn btn-glass flex-fill" onclick="copyResult()" id="btnCopy" disabled>
+            <i class="fa-solid fa-copy me-2"></i>Copy Result
+          </button>
+          <button class="btn btn-glass flex-fill" onclick="downloadResult()" id="btnDownload" disabled>
+            <i class="fa-solid fa-download me-2"></i>Download Result
+          </button>
+        </div>
+
+        <!-- Chart -->
+        <div class="mt-4">
+          <div class="small text-secondary mb-2"><i class="fa-solid fa-chart-pie me-1"></i> Operation Breakdown</div>
+          <div class="chart-wrap">
+            <canvas id="statsChart" height="180"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Step-by-step calculation ================= -->
+  <div class="glass-card mb-4">
+    <div class="card-head">
+      <h5><i class="fa-solid fa-list-ol text-info me-2"></i>Step-by-Step Calculation</h5>
+      <span class="text-secondary small" id="stepsHint">Run an operation to generate the table</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-dark table-hover align-middle steps-table mb-0" id="stepsTable">
+        <thead>
+          <tr>
+            <th>Position</th>
+            <th>Text</th>
+            <th>Key</th>
+            <th>Text Value</th>
+            <th>Key Value</th>
+            <th>Formula</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody id="stepsBody">
+          <tr><td colspan="7" class="text-center text-secondary py-4">No calculations yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ================= Alphabet values + flow ================= -->
+  <div class="row g-4 mb-4">
+    <div class="col-lg-7">
+      <div class="glass-card h-100">
+        <div class="card-head">
+          <h5><i class="fa-solid fa-arrow-down-1-9 text-info me-2"></i>Alphabet Values</h5>
+        </div>
+        <div class="alphabet-grid" id="alphabetGrid"></div>
+        <p class="text-secondary small mt-3 mb-0">
+          Every letter is converted to a number: <code>A = 0</code>, <code>B = 1</code> … <code>Z = 25</code>.
+          The cipher adds or subtracts the key value from this number and wraps around with <code>mod 26</code>.
+        </p>
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="glass-card h-100">
+        <div class="card-head">
+          <h5><i class="fa-solid fa-diagram-project text-info me-2"></i>Visual Encryption Flow</h5>
+        </div>
+        <div class="flow-list">
+          <div class="flow-step"><i class="fa-solid fa-file-lines"></i><span>Plaintext</span></div>
+          <div class="flow-arrow"><i class="fa-solid fa-arrow-down"></i></div>
+          <div class="flow-step"><i class="fa-solid fa-hashtag"></i><span>Convert Letters to Numbers</span></div>
+          <div class="flow-arrow"><i class="fa-solid fa-arrow-down"></i></div>
+          <div class="flow-step"><i class="fa-solid fa-repeat"></i><span>Repeat Secret Key</span></div>
+          <div class="flow-arrow"><i class="fa-solid fa-arrow-down"></i></div>
+          <div class="flow-step"><i class="fa-solid fa-calculator"></i><span>Apply Vigenère Formula</span></div>
+          <div class="flow-arrow"><i class="fa-solid fa-arrow-down"></i></div>
+          <div class="flow-step"><i class="fa-solid fa-letterbox"></i><span>Convert Numbers to Letters</span></div>
+          <div class="flow-arrow"><i class="fa-solid fa-arrow-down"></i></div>
+          <div class="flow-step cipher"><i class="fa-solid fa-shield-halved"></i><span>Ciphertext</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Tabula Recta ================= -->
+  <div class="glass-card mb-4">
+    <div class="card-head">
+      <h5><i class="fa-solid fa-table-cells text-info me-2"></i>Vigenère Tabula Recta</h5>
+      <span class="text-secondary small" id="tableHint">Highlighted cells show the operation used</span>
+    </div>
+    <div class="tabula-scroll">
+      <table class="tabula-table mb-0" id="tabulaTable"></table>
+    </div>
+    <div class="small text-secondary mt-3 px-3 pb-2">
+      <span class="legend-dot key"></span> Key letter (row)
+      &nbsp;&nbsp;<span class="legend-dot plain"></span> Plain letter (column)
+      &nbsp;&nbsp;<span class="legend-dot cipher"></span> Resulting cell
+      &nbsp;&nbsp;<span class="text-muted">(hover a row in the calculation table to inspect it)</span>
+    </div>
+  </div>
+
+</div>
+
+<footer class="footer-note text-center text-secondary py-4">
+  <div class="container-fluid">
+    <i class="fa-solid fa-graduation-cap me-2"></i>
+    Vigenère Cipher Dashboard — intended for <strong>educational purposes</strong> only.
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
