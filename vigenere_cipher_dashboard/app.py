@@ -9,6 +9,7 @@ Stack: Flask + Flask-SQLAlchemy + SQLite + Bootstrap 5 + JavaScript
 """
 
 import os
+import re
 from datetime import datetime
 from functools import wraps
 
@@ -21,9 +22,12 @@ from flask import (
     session,
     jsonify,
     flash,
+    abort,
 )
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+
+from ciphers import CIPHER_CONFIGS, run_classical
 
 # --------------------------------------------------------------------------
 # App configuration
@@ -38,6 +42,9 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
 ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+# Name stored for operations produced by the original Vigenere engine.
+VIGENERE = "Vigenère"
 
 
 # --------------------------------------------------------------------------
@@ -73,16 +80,24 @@ class Operation(db.Model):
     input_text = db.Column(db.Text, nullable=False)
     key = db.Column(db.String(255), nullable=False)
     result = db.Column(db.Text, nullable=False)
+    # Which cipher produced this row. Added later via migration, so old rows
+    # fall back to Vigenère (see seed_database()).
+    cipher = db.Column(db.String(30), nullable=False, default=VIGENERE, server_default=VIGENERE)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     @property
     def formatted_date(self) -> str:
         return self.created_at.strftime("%Y-%m-%d %H:%M:%S")
 
+    @property
+    def cipher_name(self) -> str:
+        return self.cipher or VIGENERE
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "operation_type": self.operation_type,
+            "cipher": self.cipher_name,
             "input_text": self.input_text,
             "key": self.key,
             "result": self.result,
@@ -90,7 +105,7 @@ class Operation(db.Model):
         }
 
     def __repr__(self) -> str:
-        return f"<Operation {self.id} {self.operation_type}>"
+        return f"<Operation {self.id} {self.cipher_name} {self.operation_type}>"
 
 
 # --------------------------------------------------------------------------
@@ -213,20 +228,53 @@ def run_cipher(message: str, key: str, mode: str):
     return "".join(result_chars), "".join(repeated_key_chars), steps, highlights
 
 
+def key_length(key: str) -> int:
+    """
+    Length of a stored key, used for the "Avg Key Length" card.
+
+    Vigenere rows store a word (e.g. "KEY") -> count the letters.
+    The new ciphers store numeric keys (e.g. "K = 3", "a = 5, b = 8")
+    -> count the digits instead.
+    """
+    key = key or ""
+    digits = re.sub(r"\D", "", key)
+    if digits:
+        return len(digits)
+    return len(clean_key(key)) or len(key.strip())
+
+
 def get_statistics() -> dict:
-    """Aggregate dashboard statistics from the operations table."""
+    """
+    Aggregate dashboard statistics from the operations table.
+
+    Existing cards (total / encrypted / decrypted / avg key length) are kept
+    exactly as before; `by_cipher` is added so the three new ciphers show up
+    without removing anything.
+    """
     total = Operation.query.count()
     encrypted = Operation.query.filter_by(operation_type="Encryption").count()
     decrypted = Operation.query.filter_by(operation_type="Decryption").count()
 
-    key_lengths = [len(clean_key(op.key)) for op in Operation.query.all()]
+    key_lengths = [key_length(op.key) for op in Operation.query.all()]
     avg_key_length = round(sum(key_lengths) / len(key_lengths)) if key_lengths else 0
+
+    # Every cipher the dashboard supports, in display order.
+    by_cipher = {VIGENERE: 0}
+    for config in CIPHER_CONFIGS.values():
+        by_cipher[config["name"]] = 0
+
+    for cipher_name, count in db.session.query(
+        Operation.cipher, db.func.count(Operation.id)
+    ).group_by(Operation.cipher).all():
+        label = cipher_name or VIGENERE
+        by_cipher[label] = by_cipher.get(label, 0) + count
 
     return {
         "total": total,
         "encrypted": encrypted,
         "decrypted": decrypted,
         "avg_key_length": avg_key_length,
+        "by_cipher": by_cipher,
     }
 
 
@@ -344,6 +392,22 @@ def how_it_works():
     return render_template("how_it_works.html")
 
 
+@app.route("/cipher/<cipher_id>")
+@login_required
+def cipher_page(cipher_id):
+    """One shared interface per cipher: additive / multiplicative / affine."""
+    config = CIPHER_CONFIGS.get(cipher_id)
+    if config is None:
+        abort(404)
+    stats = get_statistics()
+    return render_template(
+        "ciphers.html",
+        cipher=config,
+        ciphers=CIPHER_CONFIGS.values(),
+        stats=stats,
+    )
+
+
 # --------------------------------------------------------------------------
 # Routes - JSON APIs
 # --------------------------------------------------------------------------
@@ -392,6 +456,7 @@ def api_process():
         input_text=message,
         key=clean_key(key),
         result=result,
+        cipher=VIGENERE,
     )
     db.session.add(operation)
     db.session.commit()
@@ -414,11 +479,103 @@ def api_process():
     )
 
 
+@app.route("/api/cipher", methods=["POST"])
+@login_required
+def api_cipher():
+    """
+    Encrypt / decrypt with the Additive, Multiplicative or Affine cipher.
+
+    Body (JSON):
+        {
+          "cipher": "additive" | "multiplicative" | "affine",
+          "mode": "encrypt" | "decrypt",
+          "message": "...",
+          "keys": {"k": "3"}            # additive / multiplicative
+          "keys": {"a": "5", "b": "8"}   # affine
+        }
+    """
+    data = request.get_json(silent=True) or {}
+
+    cipher_id = str(data.get("cipher", "")).strip().lower()
+    mode = str(data.get("mode", "")).strip().lower()
+    message = data.get("message")
+    keys = data.get("keys")
+
+    config = CIPHER_CONFIGS.get(cipher_id)
+    if config is None:
+        return jsonify({"ok": False, "error": "Unknown cipher."}), 400
+
+    if message is None or keys is None:
+        return jsonify({"ok": False, "error": "Please enter a message and a key."}), 400
+
+    message = str(message)
+    if isinstance(keys, dict):
+        keys = {str(name): ("" if value is None else str(value))
+                for name, value in keys.items()}
+    else:
+        return jsonify({"ok": False, "error": "Invalid key payload."}), 400
+
+    # ---------------- validation ----------------
+    if not message.strip():
+        return jsonify({"ok": False, "error": "Please enter a message.", "field": "message"}), 400
+    if mode not in ("encrypt", "decrypt"):
+        return jsonify({"ok": False, "error": "Invalid operation mode."}), 400
+    if len(message) > 5000:
+        return jsonify({"ok": False, "error": "Input is too long (max 5000 characters)."}), 400
+
+    expected = [field["name"] for field in config["key_fields"]]
+    if not any(str(keys.get(name, "")).strip() for name in expected):
+        return jsonify({"ok": False, "error": "Please enter a key.", "field": "key"}), 400
+    if any(str(keys.get(name, "")).strip() == "" for name in expected):
+        missing = next(f for f in config["key_fields"]
+                       if not str(keys.get(f["name"], "")).strip())
+        return jsonify({
+            "ok": False,
+            "error": f"Please enter {missing['label']}.",
+            "field": missing["name"],
+        }), 400
+
+    try:
+        payload = run_classical(cipher_id, message, keys, mode)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc), "field": "key"}), 400
+
+    operation_type = "Encryption" if mode == "encrypt" else "Decryption"
+    operation = Operation(
+        operation_type=operation_type,
+        input_text=message,
+        key=payload["key_display"],
+        result=payload["result"],
+        cipher=config["name"],
+    )
+    db.session.add(operation)
+    db.session.commit()
+
+    return jsonify(
+        {
+            "ok": True,
+            "cipher": cipher_id,
+            "cipher_name": config["name"],
+            "mode": mode,
+            "operation_type": operation_type,
+            "message": message,
+            "key": payload["key_display"],
+            "result": payload["result"],
+            "steps": payload["steps"],
+            "inverse": payload["inverse"],
+            "inverse_note": payload["inverse_note"],
+            "enc_formula": payload["enc_formula"],
+            "dec_formula": payload["dec_formula"],
+            "id": operation.id,
+            "statistics": get_statistics(),
+        }
+    )
+
+
 @app.route("/api/statistics")
 @login_required
 def api_statistics():
     return jsonify({"ok": True, "statistics": get_statistics()})
-
 
 @app.route("/api/history")
 @login_required
@@ -430,6 +587,29 @@ def api_history():
 # --------------------------------------------------------------------------
 # Bootstrapping
 # --------------------------------------------------------------------------
+def migrate_schema():
+    """
+    Additive / Multiplicative / Affine support needs an extra `cipher` column
+    on the existing operations table. Older databases were created without it,
+    so add it in place. Existing rows keep their data and default to Vigenère.
+    """
+    with app.app_context():
+        columns = [
+            row[1]
+            for row in db.session.execute(
+                db.text("PRAGMA table_info(operations)")
+            ).fetchall()
+        ]
+        if columns and "cipher" not in columns:
+            db.session.execute(
+                db.text(
+                    "ALTER TABLE operations "
+                    "ADD COLUMN cipher VARCHAR(30) NOT NULL DEFAULT 'Vigenère'"
+                )
+            )
+            db.session.commit()
+
+
 def seed_database():
     """Create tables and the default demo account (admin / admin123)."""
     with app.app_context():
@@ -441,6 +621,7 @@ def seed_database():
             db.session.commit()
 
 
+migrate_schema()
 seed_database()
 
 

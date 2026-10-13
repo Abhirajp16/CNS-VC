@@ -591,10 +591,95 @@ code {
 }
 ::-webkit-scrollbar-thumb:hover { background: rgba(34, 211, 238, 0.65); background-clip: padding-box; }
 
+/* ---------- cipher pages (additive / multiplicative / affine) ---------- */
+.cipher-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.18), rgba(167, 139, 250, 0.18));
+  border: 1px solid rgba(34, 211, 238, 0.4);
+  color: var(--accent);
+  font-size: 1.1rem;
+  vertical-align: middle;
+}
+
+.formula-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.formula-pill {
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 0.82rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--stroke);
+  color: var(--muted);
+}
+.formula-pill.enc { color: var(--accent); border-color: rgba(34, 211, 238, 0.45); background: rgba(34, 211, 238, 0.08); }
+.formula-pill.dec { color: var(--purple); border-color: rgba(167, 139, 250, 0.45); background: rgba(167, 139, 250, 0.08); }
+
+.steps-table tr.row-muted td { color: var(--muted); font-style: italic; }
+
+.inverse-box {
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.14), rgba(34, 211, 238, 0.1));
+  border: 1px solid rgba(167, 139, 250, 0.4);
+}
+.inverse-value {
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 1rem;
+  color: #fff;
+  word-break: break-word;
+}
+
+.badge-cipher {
+  font-size: 0.74rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: rgba(99, 102, 241, 0.16);
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  color: #b9c2ff;
+}
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.cipher-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.95rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--stroke);
+  color: #c8d1e4;
+}
+.cipher-chip i { color: var(--accent); font-size: 0.8rem; }
+.cipher-chip .chip-count {
+  font-family: "Consolas", "Courier New", monospace;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(34, 211, 238, 0.16);
+  border: 1px solid rgba(34, 211, 238, 0.4);
+  border-radius: 999px;
+  padding: 0.05rem 0.55rem;
+}
+
 /* ---------- responsive ---------- */
+@media (min-width: 992px) {
+  /* seven nav items can be wider than the bar — let them wrap gracefully */
+  .glass-nav .navbar-collapse { flex-wrap: wrap; }
+  .glass-nav .nav-link { padding: 0.45rem 0.65rem !important; }
+}
+
 @media (max-width: 991.98px) {
   .glass-nav .navbar-collapse { padding: 0.6rem 0; }
   .glass-nav .nav-link { padding: 0.6rem 0.4rem !important; }
+  .formula-pills { width: 100%; }
 }
 
 @media (max-width: 767.98px) {

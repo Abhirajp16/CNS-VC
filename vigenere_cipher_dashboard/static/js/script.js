@@ -431,10 +431,37 @@ async function updateStatistics(preloaded) {
   animateNumber("statDecrypted", stats.decrypted);
   animateNumber("statAvgKey", stats.avg_key_length);
 
+  renderCipherChips(stats.by_cipher);
+
   if (statsChart) {
     statsChart.data.datasets[0].data = [stats.encrypted, stats.decrypted];
     statsChart.update();
   }
+}
+
+/* "Operations by cipher" breakdown — additive / multiplicative / affine rows
+   are added alongside the original Vigenere counter. */
+const CIPHER_CHIP_ICONS = {
+  "Vigenère": "fa-shield-halved",
+  "Additive Cipher": "fa-plus",
+  "Multiplicative Cipher": "fa-xmark",
+  "Affine Cipher": "fa-calculator",
+};
+
+function renderCipherChips(byCipher) {
+  const holder = document.getElementById("cipherChips");
+  if (!holder || !byCipher) return;
+
+  holder.innerHTML = "";
+  Object.entries(byCipher).forEach(([name, count]) => {
+    const chip = document.createElement("span");
+    chip.className = "cipher-chip";
+    const icon = CIPHER_CHIP_ICONS[name] || "fa-circle";
+    chip.innerHTML =
+      `<i class="fa-solid ${icon}"></i><span>${escapeHtml(name)}</span>` +
+      `<span class="chip-count">${escapeHtml(String(count))}</span>`;
+    holder.appendChild(chip);
+  });
 }
 
 function animateNumber(id, target) {
@@ -525,6 +552,7 @@ function clearDashboard() {
    ===================================================================== */
 function fillViewModal(op) {
   document.getElementById("vmDate").textContent = op.created_at || "—";
+  document.getElementById("vmCipher").textContent = op.cipher || "Vigenère";
   document.getElementById("vmType").textContent = op.operation_type || "—";
   document.getElementById("vmInput").textContent = op.input_text || "—";
   document.getElementById("vmKey").textContent = op.key || "—";

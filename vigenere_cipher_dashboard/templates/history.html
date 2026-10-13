@@ -20,11 +20,12 @@
     </button>
     <div class="collapse navbar-collapse" id="mainNav">
       <ul class="navbar-nav me-auto">
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}"><i class="fa-solid fa-gauge-high me-1"></i> Dashboard</a></li>
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('encrypt_page') }}"><i class="fa-solid fa-lock me-1"></i> Encrypt</a></li>
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('decrypt_page') }}"><i class="fa-solid fa-unlock me-1"></i> Decrypt</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.path in ('/dashboard', '/encrypt', '/decrypt') %}active{% endif %}" href="{{ url_for('dashboard') }}"><i class="fa-solid fa-shield-halved me-1"></i> Vigenère Cipher</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.path.startswith('/cipher/additive') %}active{% endif %}" href="{{ url_for('cipher_page', cipher_id='additive') }}"><i class="fa-solid fa-plus me-1"></i> Additive Cipher</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.path.startswith('/cipher/multiplicative') %}active{% endif %}" href="{{ url_for('cipher_page', cipher_id='multiplicative') }}"><i class="fa-solid fa-xmark me-1"></i> Multiplicative Cipher</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.path.startswith('/cipher/affine') %}active{% endif %}" href="{{ url_for('cipher_page', cipher_id='affine') }}"><i class="fa-solid fa-calculator me-1"></i> Affine Cipher</a></li>
         <li class="nav-item"><a class="nav-link active" href="{{ url_for('history') }}"><i class="fa-solid fa-clock-rotate-left me-1"></i> History</a></li>
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('how_it_works') }}"><i class="fa-solid fa-book-open me-1"></i> How It Works</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.path.startswith('/how-it-works') %}active{% endif %}" href="{{ url_for('how_it_works') }}"><i class="fa-solid fa-book-open me-1"></i> How It Works</a></li>
       </ul>
       <span class="navbar-text text-secondary me-3 d-none d-lg-inline">
         <i class="fa-solid fa-user-circle me-1"></i>{{ session.get('username', 'user') }}
@@ -74,6 +75,7 @@
         <thead>
           <tr>
             <th>Date</th>
+            <th>Cipher</th>
             <th>Operation</th>
             <th>Input</th>
             <th>Key</th>
@@ -86,6 +88,7 @@
             {% for op in operations %}
             <tr>
               <td class="text-secondary text-nowrap">{{ op.formatted_date }}</td>
+              <td><span class="badge-cipher">{{ op.cipher_name }}</span></td>
               <td>
                 {% if op.operation_type == 'Encryption' %}
                   <span class="badge-op enc"><i class="fa-solid fa-lock me-1"></i> Encryption</span>
@@ -112,7 +115,7 @@
             {% endfor %}
           {% else %}
             <tr>
-              <td colspan="6" class="text-center text-secondary py-5">
+              <td colspan="7" class="text-center text-secondary py-5">
                 <i class="fa-solid fa-inbox fa-2x mb-3 d-block"></i>
                 No operations yet — run an encryption or decryption from the dashboard.
               </td>
@@ -137,6 +140,10 @@
           <div class="col-sm-6">
             <div class="detail-label">Date</div>
             <div class="detail-value" id="vmDate">—</div>
+          </div>
+          <div class="col-sm-6">
+            <div class="detail-label">Cipher</div>
+            <div class="detail-value" id="vmCipher">—</div>
           </div>
           <div class="col-sm-6">
             <div class="detail-label">Operation</div>

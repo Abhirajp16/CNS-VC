@@ -21,11 +21,12 @@
     </button>
     <div class="collapse navbar-collapse" id="mainNav">
       <ul class="navbar-nav me-auto">
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}"><i class="fa-solid fa-gauge-high me-1"></i> Dashboard</a></li>
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('encrypt_page') }}"><i class="fa-solid fa-lock me-1"></i> Encrypt</a></li>
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('decrypt_page') }}"><i class="fa-solid fa-unlock me-1"></i> Decrypt</a></li>
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('history') }}"><i class="fa-solid fa-clock-rotate-left me-1"></i> History</a></li>
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('how_it_works') }}"><i class="fa-solid fa-book-open me-1"></i> How It Works</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.path in ('/dashboard', '/encrypt', '/decrypt') %}active{% endif %}" href="{{ url_for('dashboard') }}"><i class="fa-solid fa-shield-halved me-1"></i> Vigenère Cipher</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.path.startswith('/cipher/additive') %}active{% endif %}" href="{{ url_for('cipher_page', cipher_id='additive') }}"><i class="fa-solid fa-plus me-1"></i> Additive Cipher</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.path.startswith('/cipher/multiplicative') %}active{% endif %}" href="{{ url_for('cipher_page', cipher_id='multiplicative') }}"><i class="fa-solid fa-xmark me-1"></i> Multiplicative Cipher</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.path.startswith('/cipher/affine') %}active{% endif %}" href="{{ url_for('cipher_page', cipher_id='affine') }}"><i class="fa-solid fa-calculator me-1"></i> Affine Cipher</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.path.startswith('/history') %}active{% endif %}" href="{{ url_for('history') }}"><i class="fa-solid fa-clock-rotate-left me-1"></i> History</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.path.startswith('/how-it-works') %}active{% endif %}" href="{{ url_for('how_it_works') }}"><i class="fa-solid fa-book-open me-1"></i> How It Works</a></li>
       </ul>
       <span class="navbar-text text-secondary me-3 d-none d-lg-inline">
         <i class="fa-solid fa-user-circle me-1"></i>{{ session.get('username', 'user') }}
@@ -106,6 +107,15 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- ================= Operations by cipher ================= -->
+  <div class="glass-card mb-4">
+    <div class="card-head">
+      <h5><i class="fa-solid fa-chart-pie text-info me-2"></i>Operations by Cipher</h5>
+      <span class="text-secondary small">all ciphers share one history table</span>
+    </div>
+    <div class="chip-row" id="cipherChips"></div>
   </div>
 
   <!-- ================= Cipher panel + Result ================= -->
